@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens2/theme_provider.dart';
 import 'screens2/cart_provider.dart';
 import 'splash_screen.dart';
+import 'screens2/current_restaurant_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,8 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()..toggleTheme(isDarkMode)),
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => CurrentRestaurantProvider()),
+
       ],
       child: MyApp(),
     ),

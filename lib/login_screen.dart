@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:developer'; // For debugging
+import 'package:provider/provider.dart'; // Add this import
 
 import 'package:dw_app/screens2/restaurant_list_screen.dart';
 import 'package:dw_app/screens3/dw_home_screen.dart';
 import 'package:dw_app/screens4/rest_home_screen.dart';
 import 'package:dw_app/constants/api_constants.dart';
+import 'screens2/theme_provider.dart'; // Import your theme provider
 
 // Import the Register Screens
 import 'package:dw_app/screens2/register_screen.dart' as customer_register;
@@ -169,11 +171,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Login'),
         backgroundColor: Colors.deepOrange,
+        actions: [
+          IconButton(
+            icon: Icon(isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            onPressed: () {
+              themeProvider.toggleTheme(!isDarkMode);
+            },
+          ),
+        ],
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -181,13 +195,13 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.lock,
                 size: 100,
                 color: Colors.deepOrange,
               ),
-              const SizedBox(height: 20),
-              const Text(
+              SizedBox(height: 20),
+              Text(
                 'Welcome Back!',
                 style: TextStyle(
                   fontSize: 24,
@@ -195,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.deepOrange,
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               DropdownButtonFormField<String>(
                 value: _selectedType,
                 items: const [
@@ -214,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextField(
                 controller: _usernameController,
                 decoration: const InputDecoration(
@@ -223,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icon(Icons.person),
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               TextField(
                 controller: _passwordController,
                 decoration: const InputDecoration(
@@ -233,7 +247,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 obscureText: true,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _login,
                 style: ElevatedButton.styleFrom(
@@ -242,7 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: const Text('Login'),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               TextButton(
                 onPressed: _showRegisterDialog,
                 child: Text(

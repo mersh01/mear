@@ -1,4 +1,4 @@
 class ApiConstants {
-  static const String baseUrl = "http://mersh011.atwebpages.com/";  // Proxy server URL
-  static const String realBaseUrl = "https://mydeliverys-7.onrender.com/"; // Actual API
+  static const String baseUrl = "http://10.0.2.2/food_ordering_api/";  // Proxy server URL
+  static const String realBaseUrl = "http://localhost/food_ordering_api/"; // Actual API
 }

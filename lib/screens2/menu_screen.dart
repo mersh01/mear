@@ -1,20 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:async';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:carousel_slider/carousel_slider.dart';
+import 'package:provider/provider.dart';
 import 'package:dw_app/constants/api_constants.dart';
+import 'cart_provider.dart';
 import 'cart_screen.dart';
+import 'current_restaurant_provider.dart';
 
 class MenuScreen extends StatefulWidget {
   final int restaurantId;
+  final String restaurantName;
+  final String restaurantImage;
+  final String rating;
+  final String deliveryInfo;
   final int userId;
 
-  MenuScreen({
+  const MenuScreen({
+    Key? key,
     required this.restaurantId,
+    required this.restaurantName,
+    required this.restaurantImage,
     required this.userId,
-  });
+    this.rating = "4.5",
+    this.deliveryInfo = "20-30 min • 15 Br delivery",
+  }) : super(key: key);
 
   @override
   _MenuScreenState createState() => _MenuScreenState();
@@ -22,313 +32,324 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   List menuItems = [];
-  Timer? _timer;
-  bool isAddingToCart = false; // State for loading
+  bool isLoading = true;
+  int _selectedCategoryIndex = 0;
+  List<String> categories = ["All", "ERTB", "Pasta"];
 
   @override
   void initState() {
     super.initState();
-    fetchMenu();
-    _startAutoRefresh();
-  }
-
-  void _startAutoRefresh() {
-    _timer = Timer.periodic(Duration(seconds: 30), (Timer timer) {
-      fetchMenu();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final restaurant = Provider.of<CurrentRestaurantProvider>(context, listen: false);
+      restaurant.setRestaurant(
+        widget.restaurantId.toString(),
+        widget.restaurantName,
+      );
     });
+    fetchMenu();
   }
 
   Future<void> fetchMenu() async {
-    final response = await http.get(Uri.parse(
-        '${ApiConstants.baseUrl}get_menu.php?restaurant_id=${widget.restaurantId}'));
-
-    if (response.statusCode == 200) {
-      setState(() {
-        List<dynamic> jsonData = json.decode(response.body);
-
-        // Log the response for debugging
-        print('Fetched menu items: $jsonData');
-        menuItems = jsonData.map((item) {
-          print('Item: $item');
-          print('Images: ${item['images']}');  // Log the images
-          return {
-            'id': int.tryParse(item['id'].toString()) ?? 0,
-            'name': item['name'],
-            'description': item['description'],
-            'price': double.tryParse(item['price'].toString()) ?? 0.0,
-            'images': (item['images'] as List<dynamic>?)?.cast<String>() ?? [],
-          };
-        }).toList();
-
-      });
-    } else {
-      throw Exception('Failed to load menu');
-    }
-  }
-
-
-  Future<void> addToCart(int menuItemId, int quantity) async {
-    setState(() {
-      isAddingToCart = true; // Show loading indicator
-    });
-
-    final cartItem = {
-      'user_id': widget.userId,
-      'menu_item_id': menuItemId,
-      'quantity': quantity,
-    };
-
     try {
-      final response = await http.post(
-        Uri.parse('${ApiConstants.baseUrl}add_to_cart.php'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(cartItem),
-      );
+      final response = await http.get(Uri.parse(
+          '${ApiConstants.baseUrl}get_menu.php?restaurant_id=${widget.restaurantId}'));
 
-      final responseData = json.decode(response.body);
-      if (responseData['status'] == 'success') {
-        Fluttertoast.showToast(
-          msg: responseData['message'] ?? "Item added to cart!",
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-          fontSize: 16.0,
-        );
-      } else {
-        Fluttertoast.showToast(
-          msg: responseData['message'] ?? "Failed to add item to cart.",
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-          fontSize: 16.0,
-        );
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        if (jsonResponse['success'] == true) {
+          setState(() {
+            menuItems = jsonResponse['data'];
+            isLoading = false;
+          });
+        } else {
+          setState(() {
+            isLoading = false;
+          });
+          Fluttertoast.showToast(msg: "No menu found.");
+        }
       }
     } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
       Fluttertoast.showToast(
-        msg: "An error occurred.",
+        msg: "Failed to load menu",
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-        fontSize: 16.0,
       );
-    } finally {
-      setState(() {
-        isAddingToCart = false; // Hide loading indicator
-      });
     }
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
 
+  @override
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Menu'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.shopping_cart),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CartScreen(
-                    userId: widget.userId,
-                  ),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 200,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Image.network(
+                widget.restaurantImage,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.grey[300],
+                  child: const Icon(Icons.restaurant, size: 50),
                 ),
-              );
-            },
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.restaurantName,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.star, color: Colors.amber, size: 20),
+                      const SizedBox(width: 4),
+                      Text(
+                        widget.rating,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        widget.deliveryInfo,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 50,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: categories.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(categories[index]),
+                            selected: _selectedCategoryIndex == index,
+                            onSelected: (selected) {
+                              setState(() {
+                                _selectedCategoryIndex = index;
+                              });
+                            },
+                            selectedColor: Colors.orange,
+                            labelStyle: TextStyle(
+                              color: _selectedCategoryIndex == index
+                                  ? Colors.white
+                                  : Colors.black,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                final item = menuItems[index];
+                return MenuItemCard(
+                  id: item['id'].toString(),
+                  name: item['name'],
+                  description: item['description'],
+                  price: item['price'].toString(),
+                  discountPrice: item['discount_price']?.toString(),
+                  discountPercent: item['discount_percent']?.toString(),
+                  imageUrl: item['image_url'] ?? '',
+                  restaurantId: widget.restaurantId.toString(),
+                  restaurantName: widget.restaurantName,
+                );
+              },
+              childCount: menuItems.length,
+            ),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blueAccent, Colors.lightBlueAccent],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.orange,
+        child: const Icon(Icons.shopping_cart),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CartScreen(userId: widget.userId),
             ),
-            child: ListView.builder(
-              itemCount: menuItems.length,
-              itemBuilder: (context, index) {
-                return Card(
-                  margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  elevation: 5,
-                  child: MenuItemWidget(
-                    itemName: menuItems[index]['name'],
-                    itemDescription: menuItems[index]['description'],
-                    itemPrice: menuItems[index]['price'],
-                    itemId: menuItems[index]['id'],
-                    images: menuItems[index]['images'],
-                    onAddToCart: (quantity) async {
-                      await addToCart(menuItems[index]['id'], quantity);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-          if (isAddingToCart)
-            Center(
-              child: CircularProgressIndicator(), // Show loading indicator
-            ),
-        ],
+          );
+        },
       ),
     );
   }
 }
 
-class MenuItemWidget extends StatelessWidget {
-  final String itemName;
-  final String itemDescription;
-  final double itemPrice;
-  final int itemId;
-  final List<String> images;
-  final Future<void> Function(int quantity) onAddToCart;
+class MenuItemCard extends StatelessWidget {
+  final String id;
+  final String name;
+  final String description;
+  final String price;
+  final String? discountPrice;
+  final String? discountPercent;
+  final String imageUrl;
+  final String restaurantId;
+  final String restaurantName;
 
-  MenuItemWidget({
-    required this.itemName,
-    required this.itemDescription,
-    required this.itemPrice,
-    required this.itemId,
-    required this.images,
-    required this.onAddToCart,
-  });
+  const MenuItemCard({
+    Key? key,
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.price,
+    required this.imageUrl,
+    required this.restaurantId,
+    required this.restaurantName,
+    this.discountPrice,
+    this.discountPercent,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(10),
-      color: Colors.grey.shade300,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch, // Ensure full width
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (images.isNotEmpty)
-            CarouselSlider(
-              options: CarouselOptions(
-                height: 150,
-                autoPlay: true,
-                enlargeCenterPage: true,
-                aspectRatio: 16 / 9,
-                viewportFraction: 0.8,
+          // Food image
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              imageUrl,
+              width: 100,
+              height: 100,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 100,
+                height: 100,
+                color: Colors.grey[200],
+                child: const Icon(Icons.fastfood),
               ),
-              items: images.map((imageUrl) {
-                final fixedImageUrl = imageUrl; // Keep the original Cloudinary URL
-
-
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey,
-                        child: Icon(Icons.broken_image, color: Colors.white),
-                      );
-                    },
-                  ),
-
-                );
-              }).toList(),
-            )
-          else
-            Container(
-              color: Colors.grey,
-              width: double.infinity,
-              height: 150,
-              child: Icon(Icons.image, color: Colors.white),
             ),
-          SizedBox(height: 10),
-          Text(
-            itemName,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          SizedBox(height: 5),
-          Text(itemDescription,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[700],
-            ),),
-          SizedBox(height: 5),
-          Text(
-            'price: ETB ${itemPrice.toStringAsFixed(2)}',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          const SizedBox(width: 12),
+          // Food details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (discountPrice != null)
+                      Text(
+                        "ETB $price",
+                        style: const TextStyle(
+                          decoration: TextDecoration.lineThrough,
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
+                      ),
+                    if (discountPrice != null) const SizedBox(width: 8),
+                    Text(
+                      "ETB ${discountPrice ?? price}",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                    if (discountPercent != null) const SizedBox(width: 8),
+                    if (discountPercent != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[100],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          "$discountPercent% OFF",
+                          style: const TextStyle(
+                            color: Colors.orange,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          SizedBox(height: 10),
-          ElevatedButton(
-            onPressed: () {
-              _showQuantityDialog(context);
-            },
-            child: Text('Add to Cart'),
+          // Add button
+          Column(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.favorite_border, size: 20),
+                onPressed: () {},
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final cart = Provider.of<CartProvider>(context, listen: false);
+                  cart.addItem(
+                    id,
+                    name,
+                    double.parse(price),
+                    imageUrl,
+                    restaurantId,
+                    restaurantName,
+                  );
+                  Fluttertoast.showToast(
+                    msg: "$name added to cart",
+                    toastLength: Toast.LENGTH_SHORT,
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                ),
+                child: const Text("Add"),
+              ),
+            ],
           ),
         ],
       ),
-    );
-  }
-
-  void _showQuantityDialog(BuildContext context) {
-    int tempQuantity = 1;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text('Select Quantity'),
-          content: TextField(
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Quantity',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (value) {
-              tempQuantity = int.tryParse(value) ?? 1;
-            },
-            controller: TextEditingController(text: '1'),
-          ),
-          actions: [
-
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (tempQuantity <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please select a valid quantity')),
-                  );
-                  return; // Stop execution if quantity is not valid
-                }
-
-                Navigator.of(context).pop();
-                await onAddToCart(tempQuantity);
-              },
-              child: Text('Add to Cart'),
-            )
-
-          ],
-        );
-      },
     );
   }
 }
